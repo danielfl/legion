@@ -1,26 +1,26 @@
-#!/bin/bash
-
+#!/bin/bash 
 # Created by: Daniel Ferreira de Lima
 # Last Release: 1.1 Dom Dez  4 08:48:02 BRST 2016
 # Changelog: 1.0 Sex Dez  2 22:41:12 BRST 2016
 # Email: danielfl@gmail.com
-# Description: Execute a cmd in a ansible group
+# Description: Execute a cmd in an ansible group
+# Example: legion apt-get -y install curl
 # VIM<3
 
 PENDDIR=~/tmp
 SPREADDIR=bucket
 LOGDIR=~/tmp
 
-for cmd in ansible nmap
-do
-  type $cmd &>/dev/null || { echo $cmd command not found ; exit 1 ; }
-done
-
 # Steps:
 # Configure your hosts file
 # Configure your ssh keys for each one (or change the script to work with vault)
 # Create a ansible hosts inventory group and change de variable below
 HOSTGRP=legion
+
+for cmd in ansible nmap
+do
+  type $cmd &>/dev/null || { echo $cmd command not found ; exit 1 ; }
+done
 
 #try to keep the state
 pending() {
@@ -55,17 +55,22 @@ wakeupeverybody() {
     if [ $(date +%s -d "@${lastleg##*-}" --utc) -lt $(date +%s -d "10 minutes ago" --utc) ]
     then
         echo -ne waking up the slaves...
-        ansible ${HOSTGRP} --list-hosts|grep -v hosts|while read host ;do nmap -p 80 $host ;done 2>&1 >/dev/null
+        ansible ${HOSTGRP} --list-hosts|grep -v hosts|\
+            while read host 
+            do 
+                timeout 3s nmap -p 80 $host 
+            done 2>&1 >/dev/null
         echo . done
         touch /tmp/${HOSTGRP}-$(date +%s --utc)
+
+        pending
     fi
 
 }
 wakeupeverybody
-pending
 
 cmd() {
-    ansible ${HOSTGRP} -T 3 -t 5 -m raw -a "$*"|tee -a ${LOGDIR}/${HOSTGRP}.executed.log | grep UNREACHABLE |awk '{print $1}'\
+    ansible ${HOSTGRP} -T 3 -t 5 -m raw -a "$*"|tee -a ${LOGDIR}/${HOSTGRP}.executed.log|grep UNREACHABLE|awk '{print $1}'\
         | while read host
         do
             echo -e "#$(date)\n$*" >> ${PENDDIR}/$host.pending
@@ -79,7 +84,8 @@ cmd() {
 
 spread() {
     shift
-    ansible ${HOSTGRP} --list-hosts|grep -v hosts|while read host
+    cmd mkdir ${SPREADDIR} &>/dev/null
+    ansible ${HOSTGRP} --list-hosts|tail -n +2|while read host
         do
             echo Sending to $host ..
             scp -r $* $host:${SPREADDIR}/ &
@@ -106,3 +112,4 @@ while true; do
     menu=( "${men[@]}" )
 done
 #Eof
+
