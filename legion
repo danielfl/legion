@@ -13,7 +13,7 @@ LOGDIR=~/tmp
 
 for cmd in ansible nmap
 do
-  type $cmd || { echo $cmd command not found ; exit 1 ; }
+  type $cmd &>/dev/null || { echo $cmd command not found ; exit 1 ; }
 done
 
 # Steps:
