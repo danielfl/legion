@@ -8,7 +8,7 @@
 # VIM<3
 
 PENDDIR=~/tmp
-SPREADDIR=~/bucket
+SPREADDIR=bucket
 LOGDIR=~/tmp
 
 for cmd in ansible nmap
@@ -65,7 +65,7 @@ wakeupeverybody
 pending
 
 cmd() {
-    ansible ${HOSTGRP} -T 5 -t 5 -m raw -a "$*"|tee -a ${LOGDIR}/${HOSTGRP}.executed.log | grep UNREACHABLE |awk '{print $1}'\
+    ansible ${HOSTGRP} -T 3 -t 5 -m raw -a "$*"|tee -a ${LOGDIR}/${HOSTGRP}.executed.log | grep UNREACHABLE |awk '{print $1}'\
         | while read host
         do
             echo -e "#$(date)\n$*" >> ${PENDDIR}/$host.pending
@@ -96,7 +96,7 @@ while true; do
     if [ ${#menu} -gt 0 ] ; then
         case ${menu[0]} in
             wakeup) wakeupeverybody ; cmd echo waking up.. ;;
-            spread) spread ${menu[@]} ;;
+            spread*) spread ${menu[@]} ;;
              align) pending ;;
                 hi) cmd echo hi;;
                  *) cmd ${menu[@]} ;;
