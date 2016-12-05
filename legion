@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# Created by: Daniel Ferreira de Lima
+# Last Release: 1.1 Dom Dez  4 08:48:02 BRST 2016
+# Changelog: 1.0 Sex Dez  2 22:41:12 BRST 2016
+# Email: danielfl@gmail.com
+# Description: Execute a cmd in a ansible group
+# VIM<3
+
+PENDDIR=~/tmp
+SPREADDIR=~/bucket
+LOGDIR=~/tmp
+
+for cmd in ansible nmap
+do
+  type $cmd || { echo $cmd command not found ; exit 1 ; }
+done
+
+# Steps:
+# Configure your hosts file
+# Configure your ssh keys for each one (or change the script to work with vault)
+# Create a ansible hosts inventory group and change de variable below
+HOSTGRP=legion
+
+#try to keep the state
+pending() {
+    if ls ${PENDDIR}/*pending 2>/dev/null >/dev/null  ;then
+
+        echo Ive found pending files, want to execute them?
+        ls ${PENDDIR}/*pending|rev|cut -d / -f 1|rev
+        PS3="Choose: 1 or 2? "
+
+        select FILE in yes no ;
+        do
+            if [[ $FILE = "yes" ]] ;then
+                ls ${PENDDIR}/*pending|rev|cut -d / -f 1|rev|while read filename
+                do
+                    ansible ${filename%.*} -T 5 -t 5 -m script -a "${PENDDIR}/$filename" \
+                    && rm ${PENDDIR}/$filename
+                done
+                break
+            else
+                echo skipping..
+                break
+            fi
+        done
+    fi
+}
+
+# sleeping nodes - they usually wake up when receive a request at :80
+wakeupeverybody() {
+    lastleg=`ls -tr /tmp/${HOSTGRP}-*|tail -1`
+
+    # check if they are already awake otherwise go straight to the command loop
+    if [ $(date +%s -d "@${lastleg##*-}" --utc) -lt $(date +%s -d "10 minutes ago" --utc) ]
+    then
+        echo -ne waking up the slaves...
+        ansible ${HOSTGRP} --list-hosts|grep -v hosts|while read host ;do nmap -p 80 $host ;done 2>&1 >/dev/null
+        echo . done
+        touch /tmp/${HOSTGRP}-$(date +%s --utc)
+    fi
+
+}
+wakeupeverybody
+pending
+
+cmd() {
+    ansible ${HOSTGRP} -T 5 -t 5 -m raw -a "$*"|tee -a ${LOGDIR}/${HOSTGRP}.executed.log | grep UNREACHABLE |awk '{print $1}'\
+        | while read host
+        do
+            echo -e "#$(date)\n$*" >> ${PENDDIR}/$host.pending
+        done
+
+    echo -e "#$(date)\n$*" >> ${LOGDIR}/${HOSTGRP}.cmd.log
+
+    # shameful cmd - what is n>5?
+    awk '/UNREACHABLE/ {for(i=0;i<5;i++){getline};next} 1'<${LOGDIR}/${HOSTGRP}.executed.log|grep -v closed
+}
+
+spread() {
+    shift
+    ansible ${HOSTGRP} --list-hosts|grep -v hosts|while read host
+        do
+            echo Sending to $host ..
+            scp -r $* $host:${SPREADDIR}/ &
+            sleep 0.3
+        done
+
+    echo Task will be finished in the background..
+    exit
+}
+
+
+menu="$*"
+while true; do
+    if [ ${#menu} -gt 0 ] ; then
+        case ${menu[0]} in
+            wakeup) wakeupeverybody ; cmd echo waking up.. ;;
+            spread) spread ${menu[@]} ;;
+             align) pending ;;
+                hi) cmd echo hi;;
+                 *) cmd ${menu[@]} ;;
+        esac
+    fi
+    read -p "${HOSTGRP} # > " -a men
+    menu=( "${men[@]}" )
+done
+#Eof
