@@ -80,6 +80,7 @@ cmd() {
 
     # shameful cmd - what is n>5?
     awk '/UNREACHABLE/ {for(i=0;i<5;i++){getline};next} 1'<${LOGDIR}/${HOSTGRP}.executed.log|grep -v closed
+    > ${LOGDIR}/${HOSTGRP}.executed.log
 }
 
 spread() {
@@ -108,7 +109,7 @@ while true; do
                  *) cmd ${menu[@]} ;;
         esac
     fi
-    read -p "${HOSTGRP} # > " -a men
+    read -p "${HOSTGRP} # " -a men
     menu=( "${men[@]}" )
 done
 #Eof
